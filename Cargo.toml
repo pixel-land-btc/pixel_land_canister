@@ -1,0 +1,17 @@
+[package]
+name = "pixel-land"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+candid = "0.10.16"
+ic-cdk = "0.17.2"
+serde = "1"
+
+
+ree-types = { git =  "https://github.com/octopus-network/ree-types.git", rev = "3d0fb503384082bdeaf368305c4229801ee9ebd3" }
+ic-cdk-macros = "0.13"
+ic-stable-structures = "0.6"
+thiserror = "1.0"
+ciborium = "0.2"
+hex = "0.4"
