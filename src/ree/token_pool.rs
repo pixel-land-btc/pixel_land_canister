@@ -207,9 +207,8 @@ impl CanvasToken {
         _token_utxo_received: Vec<Utxo>,
         input_coins: Vec<InputCoin>,
         output_coins: Vec<OutputCoin>,
-        exchange_rate: u64,  // 新增：交易时使用的汇率
+        exchange_rate: u64,  
     ) -> Result<(TokenState, u64), ExchangeError> {
-        // Verify transaction structure (1 input coin Token, 1 output coin BTC)
         (input_coins.len() == 1 && output_coins.len() == 1)
             .then(|| ())
             .ok_or(ExchangeError::InvalidSignPsbtArgs(

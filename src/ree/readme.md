@@ -1,3 +1,4 @@
 获取画布所有代币列表
 
 每个代币单独的价格
+validate_sell_token
