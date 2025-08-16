@@ -45,6 +45,8 @@ pub struct TokenState {
     pub id: Option<Txid>, 
     pub nonce: u64,       
     pub btc_balance: u64,
+    pub exchange_rate: Option<u64>, // 此次交易时使用的汇率（价格）
+    pub timestamp: u64,             // 交易时间戳
 }
 
 impl Storable for TokenState {
@@ -88,14 +90,34 @@ impl CanvasToken {
         vec![self.token_id().to_string().as_bytes().to_vec()]
     }
 
-    // Calculate how many tokens can be bought with the given BTC amount
+    // Calculate how many tokens can be bought with the given BTC amount using current rate
     pub fn calculate_buy_amount(&self, btc_amount: u64) -> u128 {
-        (btc_amount as u128) * (self.meta.exchange_rate as u128)
+        let rate = self.get_current_exchange_rate();
+        (btc_amount as u128) * (rate as u128)
     }
 
-    // Calculate how much BTC can be obtained by selling the given token amount
+    // Calculate how much BTC can be obtained by selling the given token amount using current rate
     pub fn calculate_sell_amount(&self, token_amount: u128) -> u64 {
-        (token_amount / (self.meta.exchange_rate as u128)) as u64
+        let rate = self.get_current_exchange_rate();
+        (token_amount / (rate as u128)) as u64
+    }
+
+    // Calculate buy amount with specific exchange rate
+    pub fn calculate_buy_amount_with_rate(&self, btc_amount: u64, exchange_rate: u64) -> u128 {
+        (btc_amount as u128) * (exchange_rate as u128)
+    }
+
+    // Calculate sell amount with specific exchange rate
+    pub fn calculate_sell_amount_with_rate(&self, token_amount: u128, exchange_rate: u64) -> u64 {
+        (token_amount / (exchange_rate as u128)) as u64
+    }
+
+    // Get current exchange rate (from latest state or fallback to meta)
+    pub fn get_current_exchange_rate(&self) -> u64 {
+        self.states
+            .last()
+            .and_then(|state| state.exchange_rate)
+            .unwrap_or(self.meta.exchange_rate)
     }
 
     // Validates a buy token transaction (BTC -> Token mint)
@@ -109,6 +131,7 @@ impl CanvasToken {
         _token_utxo_received: Vec<Utxo>,
         input_coins: Vec<InputCoin>,
         output_coins: Vec<OutputCoin>,
+        exchange_rate: u64,  // 新增：交易时使用的汇率
     ) -> Result<(TokenState, u128), ExchangeError> {
         // Verify transaction structure (1 input coin BTC, 1 output coin Token)
         (input_coins.len() == 1 && output_coins.len() == 1)
@@ -148,8 +171,8 @@ impl CanvasToken {
             .then(|| ())
             .ok_or(ExchangeError::TooSmallFunds)?;
 
-        // Calculate expected token amount
-        let expected_token_amount = self.calculate_buy_amount(btc_amount);
+        // Calculate expected token amount using provided exchange rate
+        let expected_token_amount = self.calculate_buy_amount_with_rate(btc_amount, exchange_rate);
         
         // Verify the output token amount matches calculation
         (token_output.value == expected_token_amount)
@@ -167,6 +190,8 @@ impl CanvasToken {
         state.btc_balance = new_btc_balance;
         state.nonce += 1;
         state.id = Some(txid);
+        state.exchange_rate = Some(exchange_rate);
+        state.timestamp = ic_cdk::api::time();
 
         Ok((state, expected_token_amount))
     }
@@ -182,6 +207,7 @@ impl CanvasToken {
         _token_utxo_received: Vec<Utxo>,
         input_coins: Vec<InputCoin>,
         output_coins: Vec<OutputCoin>,
+        exchange_rate: u64,  // 新增：交易时使用的汇率
     ) -> Result<(TokenState, u64), ExchangeError> {
         // Verify transaction structure (1 input coin Token, 1 output coin BTC)
         (input_coins.len() == 1 && output_coins.len() == 1)
@@ -215,9 +241,9 @@ impl CanvasToken {
             .then(|| ())
             .ok_or(ExchangeError::TokenStateExpired(state.nonce))?;
 
-        // Calculate expected BTC amount
+        // Calculate expected BTC amount using provided exchange rate
         let token_amount = token_input.value;
-        let expected_btc_amount = self.calculate_sell_amount(token_amount);
+        let expected_btc_amount = self.calculate_sell_amount_with_rate(token_amount, exchange_rate);
 
         // Verify minimum BTC amount
         (expected_btc_amount >= MIN_BTC_VALUE)
@@ -246,6 +272,8 @@ impl CanvasToken {
         state.btc_balance = new_btc_balance;
         state.nonce += 1;
         state.id = Some(txid);
+        state.exchange_rate = Some(exchange_rate);
+        state.timestamp = ic_cdk::api::time();
 
         Ok((state, expected_btc_amount))
     }

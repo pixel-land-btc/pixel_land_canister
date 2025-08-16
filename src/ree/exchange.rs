@@ -180,7 +180,7 @@ pub async fn execute_tx(args: ExecuteTxArgs) -> ExecuteTxResponse {
     let Intention {
         exchange_id: _,
         action: _,
-        action_params: _,
+        action_params,
         pool_address,
         nonce,
         pool_utxo_spent,
@@ -188,6 +188,11 @@ pub async fn execute_tx(args: ExecuteTxArgs) -> ExecuteTxResponse {
         input_coins,
         output_coins,
     } = intention;
+
+    // Extract exchange rate from action_params
+    // For now, use a default rate - this should be passed via action_params in the future
+    // TODO: Parse exchange_rate from action_params based on actual type
+    let exchange_rate: u64 = 100; // Default rate
 
     let _guard = ExecuteTxGuard::new(pool_address.clone())
         .ok_or(format!("Token {0} Executing", pool_address).to_string())?;
@@ -208,6 +213,7 @@ pub async fn execute_tx(args: ExecuteTxArgs) -> ExecuteTxResponse {
                     pool_utxo_received,
                     input_coins,
                     output_coins,
+                    exchange_rate,
                 )
                 .map_err(|e| e.to_string())?;
 
@@ -233,6 +239,7 @@ pub async fn execute_tx(args: ExecuteTxArgs) -> ExecuteTxResponse {
                     pool_utxo_received,
                     input_coins,
                     output_coins,
+                    exchange_rate,
                 )
                 .map_err(|e| e.to_string())?;
 

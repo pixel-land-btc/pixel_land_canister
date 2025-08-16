@@ -1,7 +1,7 @@
 use super::{ExchangeError, token_pool::TokenMeta};
 use candid::{CandidType, Deserialize};
 use ic_cdk_macros::{query, update};
-use ree_types::{CoinId, bitcoin::Network, schnorr::request_ree_pool_address};
+use ree_types::{CoinId, Txid, bitcoin::Network, schnorr::request_ree_pool_address};
 use serde::Serialize;
 
 #[derive(Eq, PartialEq, CandidType, Clone, Debug, Deserialize, Serialize)]
@@ -24,6 +24,15 @@ pub struct CanvasTokenInfo {
     pub symbol: String,
     pub exchange_rate: u64,
     pub token_id: CoinId,
+}
+
+#[derive(Eq, PartialEq, CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct ExchangeRateInfo {
+    pub txid: Option<Txid>,      // 交易ID
+    pub exchange_rate: u64,      // 汇率（价格）
+    pub timestamp: u64,          // 时间戳
+    pub btc_balance: u64,        // 当时的BTC余额
+    pub nonce: u64,              // 状态版本号
 }
 
 // 
@@ -126,6 +135,7 @@ pub async fn init_canvas_token(
     })
 }
 
+
 #[update]
 pub async fn reset_blocks() -> Result<(), String> {
     let caller = ic_cdk::api::caller();
@@ -177,6 +187,32 @@ pub fn query_blocks() -> Result<Vec<super::BlockInfo>, String> {
     });
 
     Ok(res)
+}
+
+#[query]
+pub fn get_exchange_rate(token_address: String) -> Result<u64, String> {
+    let token = super::get_canvas_token(&token_address).ok_or("Token not found".to_string())?;
+    Ok(token.get_current_exchange_rate())
+}
+
+#[query]
+pub fn get_exchange_rate_history(token_address: String) -> Result<Vec<ExchangeRateInfo>, String> {
+    let token = super::get_canvas_token(&token_address).ok_or("Token not found".to_string())?;
+    
+    let history: Vec<ExchangeRateInfo> = token.states
+        .iter()
+        .filter_map(|state| {
+            state.exchange_rate.map(|rate| ExchangeRateInfo {
+                txid: state.id.clone(),
+                exchange_rate: rate,
+                timestamp: state.timestamp,
+                btc_balance: state.btc_balance,
+                nonce: state.nonce,
+            })
+        })
+        .collect();
+    
+    Ok(history)
 }
 
 #[query]
